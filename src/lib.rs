@@ -1,3 +1,6 @@
+#![deny(warnings, clippy::todo, clippy::unimplemented)]
+#![feature(let_chains)]
+
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
@@ -289,14 +292,14 @@ impl<'key> Argon2<'key> {
         use alloc::vec;
         use std::string::ToString;
 
-        if phash.hash.is_none() || phash.salt.is_none() {
-            return Err(password_hash::Error::ParamValueInvalid(password_hash::errors::InvalidValue::Malformed));
+        if let Some(hash) = &phash.hash && let Some(salt) = &phash.salt {
+            let salt = salt.as_str().to_string();
+            let mut hash_vec = vec![0u8; hash.b64_len()];
+            hash.b64_encode(&mut hash_vec)?;
+            Ok((salt, hash_vec))
+        } else {
+            Err(password_hash::Error::ParamValueInvalid(password_hash::errors::InvalidValue::Malformed))
         }
-
-        let salt = phash.salt.unwrap().as_str().to_string();
-        let mut hash = vec![0u8; phash.hash.unwrap().b64_len()];
-        phash.hash.unwrap().b64_encode(&mut hash)?;
-        Ok((salt, hash))
     }
 
     /// Import an Argon2 context from a password hash and salt.
