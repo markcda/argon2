@@ -249,12 +249,14 @@ impl<'key> Argon2<'key> {
     #[cfg_attr(docsrs, doc(cfg(feature = "password-hash")))]
     pub fn import<'a>(&self, salt: &'a str, hash: &'a [u8]) -> core::result::Result<PasswordHash<'a>, password_hash::Error> {
         use password_hash::{Output, Salt};
+        use std::string::String;
 
         let salt = Salt::from_b64(salt)?;
-        let hash = Output::init_with(hash.len(), |h| {
-            h.copy_from_slice(hash);
-            Ok(())
-        })?;
+        let hash = Output::b64_decode(
+            String::from_utf8(hash.to_vec())
+                .map_err(|_| password_hash::Error::ParamValueInvalid(password_hash::errors::InvalidValue::Malformed))?
+                .as_str()
+        )?;
 
         Ok(PasswordHash {
             algorithm: self.algorithm.ident(),
@@ -682,7 +684,7 @@ impl<'key> From<&Params> for Argon2<'key> {
     }
 }
 
-#[cfg(all(test, feature = "alloc", feature = "password-hash"))]
+#[cfg(all(test, feature = "std", feature = "alloc", feature = "password-hash"))]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use crate::{Algorithm, Argon2, Params, PasswordHasher, Salt, Version};
@@ -734,5 +736,40 @@ mod tests {
                 value,
             );
         }
+    }
+
+    #[test]
+    fn export_and_import() {
+        use std::println;
+        use password_hash::PasswordVerifier;
+
+        use crate::{
+            password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
+            Argon2
+        };
+
+        let password = "hello world!";
+        let salt = SaltString::generate(&mut OsRng);
+
+        println!("Password: {}", password);
+        println!("Salt: {}", salt);
+
+        let argon2 = Argon2::default();
+        let phash = argon2.hash_password(password.as_bytes(), &salt).unwrap();
+
+        println!("Hash: {:?}", phash);
+
+        let (salt, hash) = Argon2::export(&phash).unwrap();
+
+        println!("Exported salt: {}", salt);
+        println!("Exported hash: {:?}", hash);
+
+        let argon2 = Argon2::default();
+        let phash = argon2.import(&salt, &hash).unwrap();
+
+        println!("Imported hash: {:?}", phash);
+
+        let res = argon2.verify_password(password.as_bytes(), &phash);
+        assert!(res.is_ok());
     }
 }
