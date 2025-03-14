@@ -281,6 +281,46 @@ impl<'key> Argon2<'key> {
         })
     }
 
+    /// Export the Argon2 context as a password hash and salt.
+    #[cfg(all(feature = "std", feature = "password-hash"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "password-hash")))]
+    pub fn export(phash: &PasswordHash<'_>) -> core::result::Result<(std::string::String, std::vec::Vec<u8>), password_hash::Error> {
+        use alloc::vec;
+        use std::string::ToString;
+
+        if phash.hash.is_none() || phash.salt.is_none() {
+            return Err(password_hash::Error::ParamValueInvalid(password_hash::errors::InvalidValue::Malformed));
+        }
+
+        let salt = phash.salt.unwrap().as_str().to_string();
+        let mut hash = vec![0u8; phash.hash.unwrap().b64_len()];
+        phash.hash.unwrap().b64_encode(&mut hash)?;
+        Ok((salt, hash))
+    }
+
+    /// Import an Argon2 context from a password hash and salt.
+    #[cfg(all(feature = "std", feature = "password-hash"))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "password-hash")))]
+    pub fn import<'a>(&self, salt: &'a str, hash: &'a [u8]) -> core::result::Result<PasswordHash<'a>, password_hash::Error> {
+        use password_hash::{Output, Salt};
+
+        let salt = Salt::from_b64(salt)?;
+        let hash = Output::init_with(hash.len(), |h| {
+            h.copy_from_slice(hash);
+            Ok(())
+        })?;
+
+        Ok(PasswordHash {
+            algorithm: self.algorithm.ident(),
+            version: Some(self.version.into()),
+            params: ParamsString::try_from(&self.params)?,
+            salt: Some(salt),
+            hash: Some(hash),
+        })
+    }
+
     /// Hash a password and associated parameters into the provided output buffer.
     #[cfg(feature = "alloc")]
     #[cfg_attr(docsrs, doc(cfg(feature = "alloc")))]
