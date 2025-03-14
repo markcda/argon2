@@ -31,7 +31,7 @@ hex-literal = "0.4"
 password-hash = { version = "0.5", features = ["rand_core"] }
 
 [features]
-default = ["alloc", "password-hash", "rand"]
+default = ["std", "alloc", "password-hash", "rand"]
 alloc = ["password-hash/alloc"]
 std = ["alloc", "password-hash/std"]
 
